@@ -33,15 +33,20 @@ class SworbGetFileByHashClient(Protocol):
                 self.transport.loseConnection()
         else:
             # we're getting the file
-            self.f.write(data)
-            self.f.close()
+            if self.passthrough is True:
+                self.factory.ptransport.write(data)
+            else:
+                self.f.write(data)
+                self.f.close()
 
 class SGetFileByHashFactory(Factory):
-    def __init__(self, net, hash, filename):
+    def __init__(self, net, hash, filename, passthrough=False, t=None):
         self.net = net
         self.hash = hash
         self.filename = filename
         self.protocol = SworbGetFileByHashClient
+        self.passthrough = passthrough
+        self.ptransport = t
 
     def clientConnectionFailed(self, connector, reason):
         print "Failed connection - " + reason
@@ -72,6 +77,13 @@ class SworbServer(Protocol):
                 else:
                     self.transport.write("0")
                     # TODO ask other people we are connected to if they have it
+                    for client in self.snet.clients:
+                        host = client.split(":")[0]
+                        port = client.split(":")[1]
+
+                        cfactory = SGetFileByHashFactory(str[1], str[1], passthrough=True,
+                                t=self.transport)
+                        reactor.connectSSL(host, port, cfactory, ssl.ClientContextFactory())
 
             # File request
             if str[0] is "1":
