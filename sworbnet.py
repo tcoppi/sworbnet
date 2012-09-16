@@ -4,12 +4,17 @@ from twisted.internet.protocol import Protocol
 from twisted.internet.protocol import Factory
 from twisted.internet import ssl, reactor
 
+import ConfigParser
+
 class SworbNet:
     def __init__(self):
         self.hashes = {} # dict of hashes->file handle
+        self.clients = []
         self.connections = []
     def addHash(self, hash, handle):
         self.hashes[hash] = handle
+    def addClient(self, client):
+        self.clients.append(client)
 
 class SworbMessaging(Protocol):
     def __init__(self, factory, snet=None):
@@ -51,11 +56,19 @@ class SMFactory(Factory):
         return SworbMessaging(self, snet=self.net)
 
 if __name__ == "__main__":
+    config = ConfigParser.RawConfigParser()
+    config.read("sworbnet.cfg")
+
+    clients = config.get("clients", "clients").split(",")
+    port = config.getint("server", "port")
     net = SworbNet()
+
+    for c in clients:
+        net.addClient(c)
 
     factory = SMFactory(net)
 
-    reactor.listenSSL(8666, factory, ssl.DefaultOpenSSLContextFactory(
+    reactor.listenSSL(port, factory, ssl.DefaultOpenSSLContextFactory(
         'keys/server.key', 'keys/server.crt'))
 
     reactor.run()
