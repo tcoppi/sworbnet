@@ -8,7 +8,7 @@ import ConfigParser
 
 class SworbNet:
     def __init__(self):
-        self.hashes = {} # dict of hashes->file handle
+        self.hashes = {} # dict of hashes->file location
         self.clients = []
         self.connections = []
     def addHash(self, hash, handle):
@@ -16,7 +16,39 @@ class SworbNet:
     def addClient(self, client):
         self.clients.append(client)
 
-class SworbMessaging(Protocol):
+class SworbGetFileByHashClient(Protocol):
+    def connectionMade(self):
+        # ask for the hash
+        self.transport.write("0 " + self.factory.hash)
+        self.file = False
+        self.f = open(self.factory.filename, 'w')
+
+    def dataReceived(self, data):
+        if self.file is False:
+            if data is "1":
+                # they have it, ask for it!
+                self.transport.write("1 " + self.factory.hash)
+                self.file = True
+            else:
+                self.transport.loseConnection()
+        else:
+            # we're getting the file
+            self.f.write(data)
+            self.f.close()
+
+class SGetFileByHashFactory(Factory):
+    def __init__(self, net, hash, filename):
+        self.net = net
+        self.hash = hash
+        self.filename = filename
+        self.protocol = SworbGetFileByHashClient
+
+    def clientConnectionFailed(self, connector, reason):
+        print "Failed connection - " + reason
+    def clientConnectionLost(self, connector, reason):
+        print "Connection lost - " + reason
+
+class SworbServer(Protocol):
     def __init__(self, factory, snet=None):
         self.factory = factory
         self.snet = snet
@@ -49,11 +81,11 @@ class SworbMessaging(Protocol):
         except:
             self.transport.write("ILLEGAL")
 
-class SMFactory(Factory):
+class SSFactory(Factory):
     def __init__(self, net):
         self.net = net
     def buildProtocol(self, addr):
-        return SworbMessaging(self, snet=self.net)
+        return SworbServer(self, snet=self.net)
 
 if __name__ == "__main__":
     config = ConfigParser.RawConfigParser()
@@ -66,9 +98,9 @@ if __name__ == "__main__":
     for c in clients:
         net.addClient(c)
 
-    factory = SMFactory(net)
+    serverfactory = SSFactory(net)
 
-    reactor.listenSSL(port, factory, ssl.DefaultOpenSSLContextFactory(
+    reactor.listenSSL(port, serverfactory, ssl.DefaultOpenSSLContextFactory(
         'keys/server.key', 'keys/server.crt'))
 
     reactor.run()
