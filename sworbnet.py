@@ -3,6 +3,7 @@
 from twisted.internet.protocol import Protocol
 from twisted.internet.protocol import Factory
 from twisted.internet import ssl, reactor
+from hasher import FileHasher
 
 import ConfigParser
 
@@ -105,6 +106,10 @@ if __name__ == "__main__":
 
     clients = config.get("clients", "clients").split(",")
     port = config.getint("server", "port")
+
+    sharepath = config.get("server", "share")
+    hasher = FileHasher(sharepath)
+
     net = SworbNet()
 
     for c in clients:
